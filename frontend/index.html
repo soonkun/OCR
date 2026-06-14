@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>고문서 OCR 복원</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+</head>
+<body>
+  <div class="app">
+    <!-- 사이드바: 업로드 + 문서 목록 -->
+    <aside class="sidebar">
+      <header class="brand">
+        <div class="logo">古</div>
+        <div class="brand-text">
+          <h1>고문서 OCR 복원</h1>
+          <p>PP-OCRv5 · 전처리 파이프라인</p>
+        </div>
+      </header>
+
+      <div id="dropzone" class="dropzone">
+        <input id="file-input" type="file" multiple accept=".png,.jpg,.jpeg,.bmp,.tif,.tiff,.webp,.pdf" hidden />
+        <div class="dropzone-inner">
+          <div class="dz-icon">⤴</div>
+          <p class="dz-title">파일을 끌어다 놓거나 <span>선택</span></p>
+          <p class="dz-sub">이미지 · PDF · 여러 개 동시 업로드</p>
+        </div>
+      </div>
+
+      <details class="options" open>
+        <summary>처리 옵션</summary>
+        <div class="opt-row">
+          <label for="lang">인식 언어</label>
+          <select id="lang">
+            <option value="korean">한국어 (한자 포함)</option>
+            <option value="ch">중국어</option>
+            <option value="chinese_cht">번체 한자</option>
+            <option value="japan">일본어</option>
+            <option value="en">영어</option>
+          </select>
+        </div>
+        <div class="toggles">
+          <label class="chip"><input type="checkbox" id="opt-upscale" checked /> 업스케일</label>
+          <label class="chip"><input type="checkbox" id="opt-denoise" checked /> 디노이즈</label>
+          <label class="chip"><input type="checkbox" id="opt-deskew" checked /> 기울기 보정</label>
+          <label class="chip"><input type="checkbox" id="opt-binarize" checked /> 이진화</label>
+          <label class="chip"><input type="checkbox" id="opt-grayscale" checked /> 흑백</label>
+        </div>
+      </details>
+
+      <div class="list-head">
+        <span>문서</span>
+        <span id="doc-count" class="count">0</span>
+      </div>
+      <div id="doc-list" class="doc-list"></div>
+
+      <footer class="engine-status" id="engine-status"></footer>
+    </aside>
+
+    <!-- 본문: 선택한 문서 상세 -->
+    <main class="detail" id="detail">
+      <div class="empty-state" id="empty-state">
+        <div class="empty-icon">📜</div>
+        <h2>문서를 업로드하세요</h2>
+        <p>저화질 고문서 스캔본을 올리면 전처리 후 텍스트로 복원합니다.</p>
+      </div>
+
+      <div class="detail-view" id="detail-view" hidden>
+        <div class="detail-header">
+          <div>
+            <h2 id="d-title">—</h2>
+            <p id="d-meta" class="d-meta"></p>
+          </div>
+          <div class="detail-actions">
+            <button id="btn-retry" class="btn ghost" hidden>다시 처리</button>
+            <button id="btn-download" class="btn ghost" hidden>⬇ TXT</button>
+            <button id="btn-delete" class="btn danger-ghost">삭제</button>
+          </div>
+        </div>
+
+        <div id="d-progress-wrap" class="progress-wrap">
+          <div class="progress-track"><div id="d-progress" class="progress-bar"></div></div>
+          <span id="d-stage" class="stage-label"></span>
+        </div>
+
+        <div class="panes">
+          <section class="pane">
+            <div class="pane-head">전처리 미리보기</div>
+            <div class="preview-box" id="preview-box">
+              <span class="preview-placeholder">처리 후 표시됩니다</span>
+            </div>
+          </section>
+          <section class="pane">
+            <div class="pane-head">
+              인식 결과
+              <button id="btn-save-text" class="mini-btn" hidden>저장</button>
+            </div>
+            <textarea id="d-text" class="result-text" spellcheck="false"
+              placeholder="인식된 텍스트가 여기에 표시됩니다."></textarea>
+          </section>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+# ── 핵심 (서버 + 전처리) ─────────────────────────────
+fastapi>=0.110
+uvicorn[standard]>=0.27
+python-multipart>=0.0.9
+numpy>=1.24
+opencv-python-headless>=4.8
+scikit-image>=0.22      # Sauvola 이진화 (없으면 OpenCV adaptive 폴백)
+pypdfium2>=4.20         # PDF 페이지 렌더링
+
+# ── OCR 엔진 (선택: 미설치 시 전처리만 동작) ──────────
+# CPU 환경에서도 동작합니다. 설치 용량이 크므로 별도로 설치하세요.
+#   pip install paddlepaddle paddleocr
+# paddlepaddle>=2.6
+# paddleocr>=2.7
