@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from . import config, ocr_engine
+from . import config, layout, ocr_engine
 
 
 def _center(box) -> tuple[float, float]:
@@ -32,10 +32,20 @@ def _reading_order_key(line: dict):
 
 
 def run_dual_lines(img: np.ndarray) -> list[dict]:
-    """두 패스를 정렬해 [{ko, han, ko_score, han_score, box}] 목록 반환.
+    """듀얼패스 + 2단 컬럼 분리. [{ko, han, ko_score, han_score, box}] 목록 반환.
 
-    한쪽 패스에만 잡힌 줄은 반대쪽을 빈 문자열로 채운다.
+    2단 조판이면 좌/우 칸을 따로 OCR해 왼쪽→오른쪽 순서로 이어 읽기 순서를
+    바로잡는다. 단단 페이지면 통째로 처리한다.
     """
+    columns = layout.split_columns(img)
+    merged: list[dict] = []
+    for col in columns:
+        merged.extend(_dual_lines_single(col))
+    return merged
+
+
+def _dual_lines_single(img: np.ndarray) -> list[dict]:
+    """단일 이미지(한 칸)에 대한 듀얼패스 정렬 결과."""
     ko_lines = ocr_engine.run_ocr_lines(img, config.HANGUL_LANG)
     han_lines = ocr_engine.run_ocr_lines(img, config.HANJA_LANG)
 
