@@ -1,4 +1,4 @@
-"""LLM(Claude) 기반 한국어+한자 후보정 → 문단 재구성 + 한글 병기 + 주석.
+"""LLM(OpenAI) 기반 한국어+한자 후보정 → 문단 재구성 + 한글 병기 + 주석.
 
 듀얼패스 OCR가 만든 두 후보(한글 모델 / 한자 모델 인식 결과)를 받아:
   1) 두 후보를 종합해 원문(한글+한자 혼용)을 복원한다.
@@ -12,7 +12,7 @@
 토큰 절약 + 문맥 활용을 위해 **여러 페이지를 한 번의 호출로 묶어** 처리한다
 (config.LLM_BATCH_CHARS / LLM_BATCH_MAX_PAGES).
 
-ANTHROPIC_API_KEY 가 없거나 anthropic 미설치면 available()=False → 호출부가
+OPENAI_API_KEY 가 없거나 openai 미설치면 available()=False → 호출부가
 신뢰도 기반 폴백을 쓴다(앱은 키 없이도 정상 동작).
 """
 from __future__ import annotations
@@ -68,11 +68,11 @@ def available() -> bool:
     global _AVAILABLE
     if not config.LLM_ENABLED:
         return False
-    if not os.environ.get("ANTHROPIC_API_KEY"):
+    if not os.environ.get("OPENAI_API_KEY"):
         return False
     if _AVAILABLE is None:
         try:
-            import anthropic  # noqa: F401
+            import openai  # noqa: F401
             _AVAILABLE = True
         except Exception:
             _AVAILABLE = False
@@ -82,8 +82,8 @@ def available() -> bool:
 def _client():
     global _CLIENT
     if _CLIENT is None:
-        import anthropic
-        _CLIENT = anthropic.Anthropic()
+        from openai import OpenAI
+        _CLIENT = OpenAI()
     return _CLIENT
 
 
@@ -141,18 +141,26 @@ def _split_pages(text: str) -> dict[int, str]:
 
 def _call(user_msg: str) -> Optional[str]:
     try:
-        with _client().messages.stream(
+        # 출력이 길 수 있어 스트리밍으로 받아 취합한다.
+        stream = _client().chat.completions.create(
             model=config.LLM_MODEL,
-            max_tokens=16000,
-            thinking={"type": "adaptive"},
-            system=_SYSTEM,
-            messages=[{"role": "user", "content": user_msg}],
-        ) as stream:
-            msg = stream.get_final_message()
+            max_tokens=8000,
+            messages=[
+                {"role": "system", "content": _SYSTEM},
+                {"role": "user", "content": user_msg},
+            ],
+            stream=True,
+        )
+        parts = []
+        for chunk in stream:
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
+            if delta and delta.content:
+                parts.append(delta.content)
     except Exception:
         return None
-    return "".join(b.text for b in msg.content
-                   if getattr(b, "type", None) == "text") or None
+    return "".join(parts) or None
 
 
 def correct_document(

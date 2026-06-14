@@ -24,16 +24,16 @@
 
 ### 한글 병기 LLM 보정 켜기
 
-한국어+한자 모드의 한글 병기 보정은 **Anthropic API 키**가 있어야 동작합니다
+한국어+한자 모드의 한글 병기 보정은 **OpenAI API 키**가 있어야 동작합니다
 (키가 없으면 자동으로 신뢰도 기반 병합 폴백 — 한자가 병기 없이 그대로 출력됩니다).
 
 ```bash
-export ANTHROPIC_API_KEY="sk-ant-..."   # macOS/Linux
-setx ANTHROPIC_API_KEY "sk-ant-..."     # Windows (새 터미널부터 적용)
+export OPENAI_API_KEY="sk-..."   # macOS/Linux
+setx OPENAI_API_KEY "sk-..."     # Windows (새 터미널부터 적용)
 ```
 
 키를 설정하고 서버를 실행하면 화면 좌하단에 **"한글 병기 LLM 보정 켜짐"** 으로 표시됩니다.
-사용 모델은 환경변수 `OCR_LLM_MODEL`(기본 `claude-opus-4-8`)로 변경할 수 있습니다.
+사용 모델은 환경변수 `OCR_LLM_MODEL`(기본 `gpt-4o`)로 변경할 수 있습니다.
 
 ## 빠른 시작
 

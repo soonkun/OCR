@@ -34,8 +34,8 @@ HANJA_LANG = os.environ.get("OCR_HANJA_LANG", "chinese_cht")
 HANGUL_LANG = os.environ.get("OCR_HANGUL_LANG", "korean")
 
 # ── LLM 보정 설정 (한국어+한자 → 한글 병기) ──────────────────
-# ANTHROPIC_API_KEY 환경변수가 있으면 LLM 보정이 활성화된다(없으면 폴백).
-LLM_MODEL = os.environ.get("OCR_LLM_MODEL", "claude-opus-4-8")
+# OPENAI_API_KEY 환경변수가 있으면 LLM 보정이 활성화된다(없으면 폴백).
+LLM_MODEL = os.environ.get("OCR_LLM_MODEL", "gpt-4o")
 # 1=LLM 보정 사용, 0=끄기(키가 있어도 강제로 끔)
 LLM_ENABLED = os.environ.get("OCR_LLM_ENABLED", "1").strip().lower() in (
     "1", "true", "on", "yes",

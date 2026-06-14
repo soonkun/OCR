@@ -263,7 +263,7 @@
         if (h.llm_available) {
           s += '<br><span class="ok">●</span> 한글 병기 LLM 보정 켜짐';
         } else {
-          s += '<br><span class="warn">●</span> 한글 병기 보정 꺼짐 — ANTHROPIC_API_KEY 설정 시 활성화';
+          s += '<br><span class="warn">●</span> 한글 병기 보정 꺼짐 — OPENAI_API_KEY 설정 시 활성화';
         }
         el.innerHTML = s;
       } else {
