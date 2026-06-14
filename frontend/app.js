@@ -44,32 +44,156 @@
       hour: "2-digit", minute: "2-digit" });
   }
 
-  // ---- 업로드 --------------------------------------------------------
-  function collectOptions() {
-    const fd = new FormData();
-    fd.append("lang", $("lang").value);
-    fd.append("upscale", $("opt-upscale").checked);
-    fd.append("denoise", $("opt-denoise").checked);
-    fd.append("deskew", $("opt-deskew").checked);
-    fd.append("binarize", $("opt-binarize").checked);
-    fd.append("grayscale", $("opt-grayscale").checked);
-    return fd;
+  // ---- 전처리 조정 + 업로드 ------------------------------------------
+  let pendingFiles = [];       // 조정 중인 업로드 대기 파일
+  let previewToken = null;     // 서버 캐시 토큰
+  let renderTimer = null;      // 미리보기 디바운스
+  let showRaw = false;         // 원본/처리본 탭
+
+  // 슬라이더 파라미터: id, 출력표시 id, 표시 포맷
+  const PARAMS = {
+    brightness: ["s-brightness", "v-brightness", (v) => `${+v}`],
+    contrast: ["s-contrast", "v-contrast", (v) => (+v).toFixed(2)],
+    gamma: ["s-gamma", "v-gamma", (v) => (+v).toFixed(2)],
+    sharpen: ["s-sharpen", "v-sharpen", (v) => (+v).toFixed(1)],
+    denoise_strength: ["s-denoise", "v-denoise", (v) => `${+v}`],
+    sauvola_k: ["s-sauvola", "v-sauvola", (v) => (+v).toFixed(2)],
+  };
+
+  function readOptions() {
+    const o = {
+      grayscale: $("opt-grayscale").checked,
+      upscale: $("opt-upscale").checked,
+      deskew: $("opt-deskew").checked,
+      binarize: $("opt-binarize").checked,
+    };
+    for (const k in PARAMS) o[k] = parseFloat($(PARAMS[k][0]).value);
+    o.denoise = o.denoise_strength > 0;   // 세기 0이면 디노이즈 끔
+    return o;
   }
 
-  async function uploadFiles(fileList) {
-    const files = [...fileList];
-    if (!files.length) return;
-    const fd = collectOptions();
-    files.forEach((f) => fd.append("files", f));
+  function syncOutputs() {
+    for (const k in PARAMS) $(PARAMS[k][1]).textContent = PARAMS[k][2]($(PARAMS[k][0]).value);
+    $("ctl-sauvola").hidden = !$("opt-binarize").checked;
+  }
+
+  function setProcTab(proc) {
+    showRaw = !proc;
+    $("tab-proc").classList.toggle("active", proc);
+    $("tab-raw").classList.toggle("active", !proc);
+    renderPreview();
+  }
+
+  async function renderPreview() {
+    if (!previewToken) return;
+    $("tune-spin").hidden = false;
+    const body = showRaw ? { token: previewToken, raw: true }
+                         : { token: previewToken, ...readOptions() };
+    try {
+      const res = await fetch(API + "/preview/render", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(((await res.json().catch(() => ({}))).detail) || res.statusText);
+      const url = URL.createObjectURL(await res.blob());
+      const img = $("tune-img");
+      if (img._url) URL.revokeObjectURL(img._url);
+      img._url = url; img.src = url;
+    } catch (e) {
+      toast("미리보기 실패: " + e.message, true);
+    } finally {
+      $("tune-spin").hidden = true;
+    }
+  }
+
+  function scheduleRender() {
+    clearTimeout(renderTimer);
+    renderTimer = setTimeout(() => { if (!showRaw) renderPreview(); }, 300);
+  }
+
+  async function measure() {
+    if (!previewToken) return;
+    $("measure-result").textContent = "측정 중…";
+    try {
+      const r = await api("/preview/measure", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: previewToken, ...readOptions() }),
+      });
+      $("measure-result").innerHTML =
+        `평균 신뢰도 <b>${r.mean_score}</b> · 고신뢰 ${r.high_conf}/${r.lines}줄`
+        + (r.sample ? `<br><span style="opacity:.7">“${escapeHtml(r.sample)}”</span>` : "");
+    } catch (e) {
+      $("measure-result").textContent = "측정 실패: " + e.message;
+    }
+  }
+
+  function resetParams() {
+    const d = { "s-brightness": 0, "s-contrast": 1.0, "s-gamma": 1.0,
+                "s-sharpen": 0, "s-denoise": 10, "s-sauvola": 0.2 };
+    for (const id in d) $(id).value = d[id];
+    $("opt-grayscale").checked = true; $("opt-upscale").checked = true;
+    $("opt-deskew").checked = true; $("opt-binarize").checked = false;
+    syncOutputs(); scheduleRender();
+  }
+
+  function closeTune() {
+    $("tune-modal").hidden = true;
+    pendingFiles = []; previewToken = null;
+  }
+
+  async function openTune(fileList) {
+    pendingFiles = [...fileList];
+    if (!pendingFiles.length) return;
+    const f0 = pendingFiles[0];
+    $("tune-sub").textContent = pendingFiles.length > 1
+      ? `${f0.name} 외 ${pendingFiles.length - 1}개 — 첫 장으로 설정을 맞춥니다`
+      : f0.name;
+    $("measure-result").textContent = "";
+    $("tune-modal").hidden = false;
+    $("tab-proc").classList.add("active"); $("tab-raw").classList.remove("active");
+    showRaw = false;
+    $("tune-img").removeAttribute("src");
+    try {
+      const fd = new FormData(); fd.append("file", f0);
+      const r = await api("/preview/load", { method: "POST", body: fd });
+      previewToken = r.token;
+      renderPreview();
+    } catch (e) {
+      toast("미리보기 로드 실패: " + e.message, true);
+      closeTune();
+    }
+  }
+
+  async function startProcessing() {
+    if (!pendingFiles.length) return;
+    const fd = new FormData();
+    fd.append("lang", $("lang").value);
+    fd.append("options", JSON.stringify(readOptions()));
+    pendingFiles.forEach((f) => fd.append("files", f));
     try {
       const out = await api("/documents", { method: "POST", body: fd });
       toast(`${out.created.length}개 문서 업로드됨`);
+      closeTune();
       await refresh();
-      // 첫 업로드 문서를 자동 선택
       if (out.created[0]) selectDoc(out.created[0].id);
     } catch (e) {
       toast("업로드 실패: " + e.message, true);
     }
+  }
+
+  function setupTune() {
+    for (const k in PARAMS)
+      $(PARAMS[k][0]).addEventListener("input", () => { syncOutputs(); scheduleRender(); });
+    ["opt-grayscale", "opt-upscale", "opt-deskew", "opt-binarize"].forEach((id) =>
+      $(id).addEventListener("change", () => { syncOutputs(); scheduleRender(); }));
+    $("tab-proc").onclick = () => setProcTab(true);
+    $("tab-raw").onclick = () => setProcTab(false);
+    $("btn-measure").onclick = measure;
+    $("btn-reset").onclick = resetParams;
+    $("tune-close").onclick = closeTune;
+    $("tune-cancel").onclick = closeTune;
+    $("tune-start").onclick = startProcessing;
+    syncOutputs();
   }
 
   function setupDropzone() {
@@ -77,7 +201,7 @@
     const input = $("file-input");
     dz.addEventListener("click", () => input.click());
     input.addEventListener("change", () => {
-      uploadFiles(input.files);
+      openTune(input.files);
       input.value = "";
     });
     ["dragenter", "dragover"].forEach((ev) =>
@@ -87,7 +211,7 @@
       dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.remove("dragover"); })
     );
     dz.addEventListener("drop", (e) => {
-      if (e.dataTransfer?.files) uploadFiles(e.dataTransfer.files);
+      if (e.dataTransfer?.files) openTune(e.dataTransfer.files);
     });
   }
 
@@ -275,6 +399,7 @@
   // ---- 시작 ----------------------------------------------------------
   function init() {
     setupDropzone();
+    setupTune();
     setupActions();
     loadEngineStatus();
     startPolling();

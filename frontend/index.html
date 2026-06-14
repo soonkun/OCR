@@ -28,9 +28,9 @@
       </div>
 
       <details class="options" open>
-        <summary>처리 옵션</summary>
+        <summary>인식 언어</summary>
         <div class="opt-row">
-          <label for="lang">인식 언어</label>
+          <label for="lang">언어</label>
           <select id="lang">
             <option value="korean+han" selected>한국어+한자 (한글 병기·LLM 보정)</option>
             <option value="korean">한국어 (한글 전용)</option>
@@ -40,13 +40,7 @@
             <option value="en">영어</option>
           </select>
         </div>
-        <div class="toggles">
-          <label class="chip"><input type="checkbox" id="opt-upscale" checked /> 업스케일</label>
-          <label class="chip"><input type="checkbox" id="opt-denoise" checked /> 디노이즈</label>
-          <label class="chip"><input type="checkbox" id="opt-deskew" checked /> 기울기 보정</label>
-          <label class="chip"><input type="checkbox" id="opt-binarize" /> 이진화 (얼룩 심할 때만)</label>
-          <label class="chip"><input type="checkbox" id="opt-grayscale" checked /> 흑백</label>
-        </div>
+        <p class="opt-hint">파일을 올리면 전처리(밝기·대비·선명도 등)를 미리보며 조정할 수 있어요.</p>
       </details>
 
       <div class="list-head">
@@ -102,6 +96,76 @@
         </div>
       </div>
     </main>
+  </div>
+
+  <!-- 전처리 미세조정 모달 -->
+  <div id="tune-modal" class="modal" hidden>
+    <div class="modal-card">
+      <div class="modal-head">
+        <div>
+          <h3>전처리 조정</h3>
+          <p id="tune-sub" class="modal-sub"></p>
+        </div>
+        <button id="tune-close" class="btn ghost">✕</button>
+      </div>
+
+      <div class="tune-body">
+        <div class="tune-preview">
+          <div class="seg-tabs">
+            <button id="tab-proc" class="seg active">처리본</button>
+            <button id="tab-raw" class="seg">원본</button>
+            <span id="tune-spin" class="tune-spin" hidden>…처리 중</span>
+          </div>
+          <div class="tune-img-box"><img id="tune-img" alt="미리보기" /></div>
+          <div id="tune-measure" class="tune-measure">
+            <button id="btn-measure" class="btn">🔍 OCR 적합도 측정</button>
+            <span id="measure-result" class="measure-result"></span>
+          </div>
+        </div>
+
+        <div class="tune-controls">
+          <div class="ctl">
+            <label>밝기 <output id="v-brightness">0</output></label>
+            <input type="range" id="s-brightness" min="-80" max="80" step="2" value="0" />
+          </div>
+          <div class="ctl">
+            <label>대비 <output id="v-contrast">1.0</output></label>
+            <input type="range" id="s-contrast" min="0.5" max="2.5" step="0.05" value="1.0" />
+          </div>
+          <div class="ctl">
+            <label>감마 <output id="v-gamma">1.0</output> <small>(흐린 획 살리기)</small></label>
+            <input type="range" id="s-gamma" min="0.4" max="2.5" step="0.05" value="1.0" />
+          </div>
+          <div class="ctl">
+            <label>선명도 <output id="v-sharpen">0.0</output></label>
+            <input type="range" id="s-sharpen" min="0" max="2" step="0.1" value="0" />
+          </div>
+          <div class="ctl">
+            <label>디노이즈 세기 <output id="v-denoise">10</output></label>
+            <input type="range" id="s-denoise" min="0" max="30" step="1" value="10" />
+          </div>
+
+          <div class="toggles">
+            <label class="chip"><input type="checkbox" id="opt-grayscale" checked /> 흑백</label>
+            <label class="chip"><input type="checkbox" id="opt-upscale" checked /> 업스케일</label>
+            <label class="chip"><input type="checkbox" id="opt-deskew" checked /> 기울기 보정</label>
+            <label class="chip"><input type="checkbox" id="opt-binarize" /> 이진화</label>
+          </div>
+          <div class="ctl" id="ctl-sauvola" hidden>
+            <label>이진화 강도(k) <output id="v-sauvola">0.20</output></label>
+            <input type="range" id="s-sauvola" min="0.05" max="0.5" step="0.01" value="0.2" />
+          </div>
+
+          <p class="opt-hint">💡 이진화는 흐린 활자엔 보통 해로워요(기본 OFF). 여러 파일은 첫 장으로 맞춘 설정이 전체에 적용됩니다.</p>
+          <button id="btn-reset" class="btn ghost mini">기본값으로</button>
+        </div>
+      </div>
+
+      <div class="modal-foot">
+        <button id="tune-cancel" class="btn ghost">취소</button>
+        <button id="tune-start" class="btn primary">이 설정으로 처리 시작</button>
+      </div>
+    </div>
   </div>
 
   <div id="toast" class="toast" hidden></div>

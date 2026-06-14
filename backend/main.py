@@ -5,17 +5,20 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+import json
+
+from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import (
     FileResponse,
     JSONResponse,
     PlainTextResponse,
     RedirectResponse,
+    Response,
 )
 from fastapi.staticfiles import StaticFiles
 
-from . import config, db, llm_correct, ocr_engine, pipeline
-from .preprocess import PreprocessOptions
+from . import config, db, llm_correct, ocr_engine, pipeline, preview
+from .preprocess import PreprocessOptions, preprocess_image
 
 app = FastAPI(title="고문서 OCR 복원", version="1.0.0")
 
@@ -69,19 +72,14 @@ def _parse_bool(value: str | None, default: bool) -> bool:
 async def upload_documents(
     files: list[UploadFile] = File(...),
     lang: str = Form(config.DEFAULT_LANG),
-    grayscale: str | None = Form(None),
-    denoise: str | None = Form(None),
-    upscale: str | None = Form(None),
-    deskew: str | None = Form(None),
-    binarize: str | None = Form(None),
+    options: str = Form("{}"),
 ) -> JSONResponse:
-    opt = PreprocessOptions(
-        grayscale=_parse_bool(grayscale, True),
-        denoise=_parse_bool(denoise, True),
-        upscale=_parse_bool(upscale, True),
-        deskew=_parse_bool(deskew, True),
-        binarize=_parse_bool(binarize, True),
-    )
+    # options: 전처리 옵션 JSON 문자열(토글 + 미세조정 파라미터)
+    try:
+        opt_data = json.loads(options) if options else {}
+    except (ValueError, TypeError):
+        opt_data = {}
+    opt = PreprocessOptions.from_dict(opt_data)
 
     created: list[dict[str, Any]] = []
     for upload in files:
@@ -185,6 +183,63 @@ def download_text(doc_id: str):
         headers=headers,
         media_type="text/plain; charset=utf-8",
     )
+
+
+# ---------------------------------------------------------------------------
+# 전처리 미세조정 미리보기
+# ---------------------------------------------------------------------------
+
+@app.post("/api/preview/load")
+async def preview_load(file: UploadFile = File(...)) -> dict[str, Any]:
+    """파일 첫 페이지를 캐시하고 토큰을 발급(이후 재업로드 없이 조정)."""
+    data = await file.read()
+    if len(data) > config.MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="파일이 너무 큽니다.")
+    try:
+        arr = preview.load_first_page(data, file.filename or "")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"미리보기 로드 실패: {exc}")
+    token = preview.store(arr)
+    h, w = arr.shape[:2]
+    return {"token": token, "width": w, "height": h}
+
+
+@app.post("/api/preview/render")
+def preview_render(payload: dict[str, Any] = Body(...)):
+    """토큰 + 전처리 파라미터로 처리한 이미지를 PNG로 반환. raw=true면 원본."""
+    arr = preview.get(str(payload.get("token", "")))
+    if arr is None:
+        raise HTTPException(status_code=404, detail="미리보기가 만료되었습니다. 다시 선택하세요.")
+    if payload.get("raw"):
+        png = preview.encode_png(arr)
+    else:
+        opt = PreprocessOptions.from_dict(payload)
+        png = preview.encode_png(preprocess_image(arr, opt))
+    return Response(content=png, media_type="image/png")
+
+
+@app.post("/api/preview/measure")
+def preview_measure(payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    """중앙 일부만 OCR해 전처리 설정의 OCR 적합도(신뢰도)를 빠르게 측정."""
+    arr = preview.get(str(payload.get("token", "")))
+    if arr is None:
+        raise HTTPException(status_code=404, detail="미리보기가 만료되었습니다. 다시 선택하세요.")
+    if not ocr_engine.paddle_available():
+        raise HTTPException(status_code=400, detail="OCR 엔진이 설치되어 있지 않습니다.")
+    opt = PreprocessOptions.from_dict(payload)
+    proc = preprocess_image(arr, opt)
+    crop = preview.center_crop(proc)
+    lines = ocr_engine.run_ocr_lines(crop, config.HANGUL_LANG)
+    scores = [l["score"] for l in lines if l.get("score")]
+    mean = sum(scores) / len(scores) if scores else 0.0
+    hi = sum(1 for s in scores if s >= 0.85)
+    sample = " ".join(l["text"] for l in lines[:6] if l.get("text"))
+    return {
+        "mean_score": round(mean, 3),
+        "lines": len(lines),
+        "high_conf": hi,
+        "sample": sample[:120],
+    }
 
 
 # ---------------------------------------------------------------------------
