@@ -38,7 +38,15 @@ def _build_engine(lang: str):
 
     # 버전/인자 호환성: 신버전은 ocr_version·use_angle_cls 인자를
     # 받아들이지 않을 수 있어 단계적으로 시도한다.
+    # PP-OCRv5(3.x)에서는 문서 방향분류·왜곡보정·텍스트라인 방향 모델을 꺼서
+    # 다운로드해야 할 모델 수를 줄인다(오프라인 환경에 유리, 속도도 빠름).
     attempts = [
+        dict(lang=lang, ocr_version=config.OCR_VERSION,
+             use_doc_orientation_classify=False, use_doc_unwarping=False,
+             use_textline_orientation=False),
+        dict(lang=lang,
+             use_doc_orientation_classify=False, use_doc_unwarping=False,
+             use_textline_orientation=False),
         dict(lang=lang, ocr_version=config.OCR_VERSION, use_angle_cls=True,
              show_log=False),
         dict(lang=lang, ocr_version=config.OCR_VERSION),

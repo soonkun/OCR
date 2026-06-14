@@ -38,6 +38,32 @@ pip install paddlepaddle paddleocr
 
 브라우저에서 **http://localhost:8000/app/** 접속.
 
+## 오프라인(인터넷 없는 환경) 사용
+
+이 프로그램은 **모델을 한 번만 받으면 그 뒤로는 인터넷 없이** 완전히 동작합니다.
+PaddleOCR은 첫 실행 시 글자 인식 모델을 다운로드해 다음 폴더에 저장합니다.
+
+```
+Windows : C:\Users\<사용자>\.paddlex\official_models\
+macOS/Linux : ~/.paddlex/official_models/
+```
+
+이 폴더만 있으면 인터넷이 차단된 PC에서도 OCR이 동작합니다.
+
+### 모델을 받지 못하는 망(방화벽 등)일 때 — 폴더 복사 우회법
+
+회사·학교처럼 모델 서버(HuggingFace/바이두 등)가 막힌 환경이라면:
+
+1. **인터넷이 자유로운 다른 PC**(집·휴대폰 핫스팟에 연결한 PC 등)에서
+   이 프로그램을 한 번 실행해 작은 파일로 OCR을 돌립니다.
+   → 모델이 위 `.paddlex/official_models` 폴더에 받아집니다.
+2. 그 **`.paddlex` 폴더를 USB로 복사**해 차단된 PC의
+   `C:\Users\<사용자>\` 아래에 붙여넣습니다.
+3. 이제 차단된 PC에서도 **인터넷 없이** OCR이 동작합니다.
+
+> 모델 다운로드 서버를 지정하려면 실행 전 환경변수를 설정하세요(PowerShell):
+> `$env:PADDLE_PDX_MODEL_SOURCE="HuggingFace"` (또는 `ModelScope`, `BOS`)
+
 ## 아키텍처
 
 ```
