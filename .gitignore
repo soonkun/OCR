@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# 앱 런타임 데이터 (업로드·미리보기·DB)
+data/
+
+# 테스트용 샘플 스캔본 (코드 저장소에 넣지 않음)
+*.pdf
+*.PDF
+
+# PaddleOCR / PaddleX 모델 캐시
+.paddlex/
+.paddleocr/
+
+# 에디터 / 도구
+.claude/
+.DS_Store
+.idea/
+.vscode/

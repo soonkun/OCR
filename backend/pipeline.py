@@ -11,7 +11,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from . import config, db, ocr_engine
+from . import config, db, dual_ocr, llm_correct, ocr_engine
 from .preprocess import PreprocessOptions, preprocess_image
 
 _EXECUTOR = ThreadPoolExecutor(max_workers=config.MAX_WORKERS)
@@ -90,6 +90,7 @@ def _process(doc_id: str) -> None:
     opt = PreprocessOptions.from_dict(doc.get("options"))
     lang = doc.get("lang") or config.DEFAULT_LANG
     path = Path(doc["orig_path"])
+    is_mixed = (lang == config.MIXED_LANG) and ocr_engine.paddle_available()
 
     db.update_progress(doc_id, stage="문서 불러오는 중", progress=3)
     pages = _load_pages(path)
@@ -97,10 +98,14 @@ def _process(doc_id: str) -> None:
 
     total = len(pages)
     page_texts: list[str] = []
+    # 혼용 모드: 페이지별 듀얼패스 줄 후보를 모아 두었다가 배치로 LLM 보정한다.
+    page_candidates: list[list[dict]] = []
 
+    # OCR 구간은 5~85%, 혼용 LLM 보정 구간은 85~97%로 분배.
+    ocr_end = 85.0 if is_mixed else 95.0
     for idx, page in enumerate(pages):
-        base = 5 + (idx / total) * 90  # 5~95% 구간을 페이지에 분배
-        span = 90 / total
+        base = 5 + (idx / total) * (ocr_end - 5)
+        span = (ocr_end - 5) / total
 
         db.update_progress(
             doc_id,
@@ -117,7 +122,13 @@ def _process(doc_id: str) -> None:
             stage=f"문자 인식 중 ({idx + 1}/{total}페이지)",
             progress=base + span * 0.4,
         )
-        text = ocr_engine.run_ocr(processed, lang)
+        if is_mixed:
+            lines = dual_ocr.run_dual_lines(processed)
+            page_candidates.append(lines)
+            # 우선 폴백(신뢰도 병합) 텍스트를 채워둔다. LLM이 있으면 뒤에서 덮어쓴다.
+            text = dual_ocr.merge_fallback(lines)
+        else:
+            text = ocr_engine.run_ocr(processed, lang)
         page_texts.append(text)
 
         db.update_progress(
@@ -126,6 +137,23 @@ def _process(doc_id: str) -> None:
             progress=base + span,
         )
 
+    # === LLM 한글 병기 보정 (혼용 모드, 여러 페이지를 배치로) =================
+    # 토큰 절약 + 문맥 활용을 위해 페이지를 묶어 호출한다(backend/llm_correct.py).
+    # 키가 없거나 실패하면 위에서 채운 폴백 텍스트가 그대로 유지된다.
+    if is_mixed and llm_correct.available() and any(page_candidates):
+        def _cb(done: int, total_batches: int) -> None:
+            frac = done / max(total_batches, 1)
+            db.update_progress(
+                doc_id,
+                stage=f"한글 병기 보정 중 ({done + 1}/{total_batches}묶음)",
+                progress=85 + frac * 12,
+            )
+        corrected = llm_correct.correct_document(page_candidates, _cb)
+        if corrected:
+            for i, c in enumerate(corrected):
+                if c:
+                    page_texts[i] = c
+
     # 여러 페이지는 구분선으로 합친다.
     if total > 1:
         joined = "\n\n".join(
@@ -133,12 +161,6 @@ def _process(doc_id: str) -> None:
         )
     else:
         joined = page_texts[0] if page_texts else ""
-
-    # === LLM 보정 확장 포인트 ===========================================
-    # 추후 여기서 page_texts(또는 joined)를 LLM에 넘겨 앞뒤 문맥 기반으로
-    # 어색한 문장을 교정한 결과로 대체할 수 있다. (현재는 원문 그대로 저장)
-    # 예: joined = llm_refine.refine(joined, lang=lang)
-    # ====================================================================
 
     db.update_progress(doc_id, stage="결과 저장 중", progress=98)
     db.finish_document(doc_id, joined)

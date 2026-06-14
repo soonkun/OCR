@@ -6,9 +6,14 @@ numpy>=1.24
 opencv-python-headless>=4.8
 scikit-image>=0.22      # Sauvola 이진화 (없으면 OpenCV adaptive 폴백)
 pypdfium2>=4.20         # PDF 페이지 렌더링
+eval_type_backport>=0.2 # Python 3.9에서 'str | None' 등 신형 타입구문 런타임 평가 지원
 
 # ── OCR 엔진 (선택: 미설치 시 전처리만 동작) ──────────
 # CPU 환경에서도 동작합니다. 설치 용량이 크므로 별도로 설치하세요.
 #   pip install paddlepaddle paddleocr
 # paddlepaddle>=2.6
 # paddleocr>=2.7
+
+# ── LLM 보정 (선택: 한국어+한자 '한글 병기' 후보정) ───────
+# ANTHROPIC_API_KEY 환경변수가 있어야 동작. 없으면 자동 폴백.
+anthropic>=0.49

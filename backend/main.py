@@ -14,7 +14,7 @@ from fastapi.responses import (
 )
 from fastapi.staticfiles import StaticFiles
 
-from . import config, db, ocr_engine, pipeline
+from . import config, db, llm_correct, ocr_engine, pipeline
 from .preprocess import PreprocessOptions
 
 app = FastAPI(title="고문서 OCR 복원", version="1.0.0")
@@ -41,6 +41,7 @@ def health() -> dict[str, Any]:
     return {
         "status": "ok",
         "paddle_available": ocr_engine.paddle_available(),
+        "llm_available": llm_correct.available(),
         "default_lang": config.DEFAULT_LANG,
     }
 

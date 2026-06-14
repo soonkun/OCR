@@ -259,7 +259,13 @@
       const h = await api("/health");
       const el = $("engine-status");
       if (h.paddle_available) {
-        el.innerHTML = '<span class="ok">●</span> OCR 엔진 준비됨 (PP-OCRv5)';
+        let s = '<span class="ok">●</span> OCR 엔진 준비됨 (PP-OCRv5)';
+        if (h.llm_available) {
+          s += '<br><span class="ok">●</span> 한글 병기 LLM 보정 켜짐';
+        } else {
+          s += '<br><span class="warn">●</span> 한글 병기 보정 꺼짐 — ANTHROPIC_API_KEY 설정 시 활성화';
+        }
+        el.innerHTML = s;
       } else {
         el.innerHTML = '<span class="warn">●</span> OCR 엔진 미설치 — 전처리만 동작 (pip install paddlepaddle paddleocr)';
       }
