@@ -7,8 +7,9 @@
   4. 디스큐 (기운 문서를 수평으로 보정)
   5. 이진화 (Sauvola 적응형 임계값; 미설치 시 OpenCV adaptive 폴백)
 
-PP-OCR 계열은 자연 이미지에서 잘 동작하므로 이진화는 기본 ON이되
-글자가 깨질 경우 UI에서 끌 수 있다. 각 단계는 독립적으로 토글된다.
+PP-OCR 계열은 자연 이미지(그레이/컬러)에서 잘 동작하므로 이진화는 기본 OFF다.
+흐릿한 활자에서 이진화가 획을 끊어 인식률을 떨어뜨리기 때문(실측 확인).
+얼룩·번짐이 심한 문서에서만 UI에서 켠다. 각 단계는 독립적으로 토글된다.
 """
 from __future__ import annotations
 
@@ -34,7 +35,10 @@ class PreprocessOptions:
     denoise: bool = True
     upscale: bool = True
     deskew: bool = True
-    binarize: bool = True
+    # 이진화는 기본 OFF. 흐릿한 고문서(얇은 활자)에서는 Sauvola/adaptive 이진화가
+    # 획을 끊어 인식률을 크게 떨어뜨린다(실측: 고신뢰 줄 50→14). PP-OCRv5는
+    # 그레이/컬러 입력에서 더 잘 동작한다. 얼룩이 심한 문서에서만 UI로 켠다.
+    binarize: bool = False
 
     # 업스케일 목표: 긴 변이 이 픽셀보다 작으면 확대
     upscale_min_long_edge: int = 1600

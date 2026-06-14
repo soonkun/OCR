@@ -7,6 +7,15 @@ from pathlib import Path
 # 프로젝트 루트 (이 파일 기준 한 단계 위)
 ROOT_DIR = Path(__file__).resolve().parent.parent
 
+# 프로젝트 폴더의 .env 파일을 자동으로 읽어 환경변수로 올린다.
+# (OPENAI_API_KEY 등을 터미널에 매번 치지 않고 파일 한 줄로 설정 가능)
+# 이미 설정된 환경변수는 덮어쓰지 않는다(override=False).
+try:
+    from dotenv import load_dotenv
+    load_dotenv(ROOT_DIR / ".env", override=False)
+except Exception:
+    pass
+
 DATA_DIR = Path(os.environ.get("OCR_DATA_DIR", ROOT_DIR / "data"))
 UPLOAD_DIR = DATA_DIR / "uploads"      # 원본 업로드
 PREVIEW_DIR = DATA_DIR / "previews"    # 전처리 미리보기 이미지

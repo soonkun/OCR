@@ -14,6 +14,22 @@ from typing import Optional
 
 import numpy as np
 
+
+def _ensure_bgr(img: np.ndarray) -> np.ndarray:
+    """PaddleOCR은 3채널(H,W,3)을 요구한다. 이진화·흑백 전처리로 들어온
+    1채널(H,W) 또는 (H,W,1)/(H,W,4) 이미지를 3채널 BGR로 정규화한다."""
+    import cv2
+
+    if img.ndim == 2:
+        return cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+    if img.ndim == 3:
+        ch = img.shape[2]
+        if ch == 1:
+            return cv2.cvtColor(img[:, :, 0], cv2.COLOR_GRAY2BGR)
+        if ch == 4:
+            return cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+    return img
+
 _LOCK = threading.Lock()
 _ENGINES: dict[str, "object"] = {}
 _PADDLE_AVAILABLE: Optional[bool] = None
@@ -103,6 +119,7 @@ def run_ocr(img: np.ndarray, lang: str) -> str:
     if not paddle_available():
         return _fallback_text()
 
+    img = _ensure_bgr(img)
     engine = _get_engine(lang)
     # paddleocr 버전에 따라 predict 또는 ocr 사용
     if hasattr(engine, "predict"):
@@ -189,6 +206,7 @@ def run_ocr_lines(img: np.ndarray, lang: str) -> list[dict]:
     """
     if not paddle_available():
         return []
+    img = _ensure_bgr(img)
     engine = _get_engine(lang)
     if hasattr(engine, "predict"):
         try:

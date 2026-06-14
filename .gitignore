@@ -13,6 +13,9 @@ data/
 *.pdf
 *.PDF
 
+# API 키 등 비밀값 (절대 커밋 금지)
+.env
+
 # PaddleOCR / PaddleX 모델 캐시
 .paddlex/
 .paddleocr/
