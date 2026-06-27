@@ -56,6 +56,11 @@ def _build_engine(lang: str):
     # 받아들이지 않을 수 있어 단계적으로 시도한다.
     # PP-OCRv5(3.x)에서는 문서 방향분류·왜곡보정·텍스트라인 방향 모델을 꺼서
     # 다운로드해야 할 모델 수를 줄인다(오프라인 환경에 유리, 속도도 빠름).
+    #
+    # ※ MKLDNN(oneDNN)은 기본값(켜짐) 그대로 둔다. paddlepaddle 3.1.0 + CPU에서는
+    #   MKLDNN을 끄면(enable_mkldnn=False) 큰 이미지 추론이 Segmentation fault로
+    #   죽는다(실측). 반대로 켜 두면 정상 동작한다. 따라서 mkldnn 인자를 강제로
+    #   넘기지 않는다(이전 3.0.0용 enable_mkldnn=False 우회는 제거).
     attempts = [
         dict(lang=lang, ocr_version=config.OCR_VERSION,
              use_doc_orientation_classify=False, use_doc_unwarping=False,

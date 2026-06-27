@@ -25,27 +25,20 @@ def _center(box) -> tuple[float, float]:
     return ((x1 + x2) / 2.0, (y1 + y2) / 2.0)
 
 
-def _reading_order_key(line: dict):
-    """위→아래, 좌→우 읽기 순서. 같은 줄로 볼 y 허용오차 12px."""
-    cx, cy = _center(line.get("box"))
-    return (round(cy / 12.0), cx)
-
-
 def run_dual_lines(img: np.ndarray) -> list[dict]:
-    """듀얼패스 + 2단 컬럼 분리. [{ko, han, ko_score, han_score, box}] 목록 반환.
+    """듀얼패스 + 다단 읽기순서 복원. [{ko, han, ko_score, han_score, box}] 반환.
 
-    2단 조판이면 좌/우 칸을 따로 OCR해 왼쪽→오른쪽 순서로 이어 읽기 순서를
-    바로잡는다. 단단 페이지면 통째로 처리한다.
+    페이지 전체를 ko·han 모델로 한 번씩 OCR해 줄 박스를 모으고, 줄 박스의 x분포로
+    단(칸)을 추정해 칸 좌→우·칸 안 위→아래 순으로 정렬한다(backend/layout.py).
+    사진·삽화가 많은 페이지에서도 텍스트 박스 기준이라 단 구조가 흔들리지 않는다.
     """
-    columns = layout.split_columns(img)
-    merged: list[dict] = []
-    for col in columns:
-        merged.extend(_dual_lines_single(col))
-    return merged
+    merged = _match_ko_han(img)
+    page_w = img.shape[1]
+    return layout.order_lines_by_column(merged, page_w)
 
 
-def _dual_lines_single(img: np.ndarray) -> list[dict]:
-    """단일 이미지(한 칸)에 대한 듀얼패스 정렬 결과."""
+def _match_ko_han(img: np.ndarray) -> list[dict]:
+    """페이지 전체 ko·han 듀얼패스를 줄 박스 중심으로 짝지어 병합(정렬 전)."""
     ko_lines = ocr_engine.run_ocr_lines(img, config.HANGUL_LANG)
     han_lines = ocr_engine.run_ocr_lines(img, config.HANJA_LANG)
 
@@ -88,7 +81,6 @@ def _dual_lines_single(img: np.ndarray) -> list[dict]:
                 "box": h.get("box"),
             })
 
-    merged.sort(key=_reading_order_key)
     return merged
 
 

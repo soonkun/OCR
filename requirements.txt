@@ -10,9 +10,11 @@ eval_type_backport>=0.2 # Python 3.9에서 'str | None' 등 신형 타입구문 
 
 # ── OCR 엔진 (선택: 미설치 시 전처리만 동작) ──────────
 # CPU 환경에서도 동작합니다. 설치 용량이 크므로 별도로 설치하세요.
-#   pip install paddlepaddle paddleocr
-# paddlepaddle>=2.6
-# paddleocr>=2.7
+#   pip install "paddlepaddle>=3.1" paddleocr
+# ※ paddlepaddle 3.0.0 은 CPU PIR 추론 버그("Type of attribute: strides is not
+#   right")로 모델 로딩이 깨진다. 반드시 3.1.0 이상을 쓸 것. (3.1.0에서 검증됨)
+# paddlepaddle>=3.1
+# paddleocr>=3.0
 
 # ── LLM 보정 (선택: 한국어+한자 '한글 병기' 후보정) ───────
 # OPENAI_API_KEY 환경변수가 있어야 동작. 없으면 자동 폴백.
