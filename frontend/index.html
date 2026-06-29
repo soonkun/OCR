@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>고문서 OCR 복원</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=20260629e" />
 </head>
 <body>
   <div class="app">
@@ -16,6 +16,8 @@
           <h1>고문서 OCR 복원</h1>
           <p>PP-OCRv5 · 전처리 파이프라인</p>
         </div>
+        <button id="help-btn" class="help-btn" type="button"
+                title="사용법 안내 다시 보기" aria-label="사용법 안내 다시 보기">?</button>
       </header>
 
       <div id="dropzone" class="dropzone">
@@ -42,6 +44,15 @@
         </div>
         <p class="opt-hint">파일을 올리면 전처리(밝기·대비·선명도 등)를 미리보며 조정할 수 있어요.</p>
       </details>
+
+      <div class="ui-scale">
+        <label for="scale-range">글씨 크기 <output id="scale-val">110%</output></label>
+        <div class="scale-row">
+          <button id="scale-down" class="scale-btn" type="button" aria-label="글씨 작게">A−</button>
+          <input type="range" id="scale-range" min="90" max="130" step="5" value="110" />
+          <button id="scale-up" class="scale-btn" type="button" aria-label="글씨 크게">A+</button>
+        </div>
+      </div>
 
       <div class="list-head">
         <span>문서</span>
@@ -78,13 +89,21 @@
           <span id="d-stage" class="stage-label"></span>
         </div>
 
-        <div class="panes">
-          <section class="pane">
-            <div class="pane-head">전처리 미리보기</div>
+        <div class="panes" id="panes">
+          <section class="pane" id="preview-pane">
+            <div class="pane-head">
+              전처리 미리보기
+              <span id="d-pagenav" class="d-pagenav" hidden>
+                <button id="d-page-prev" class="pg-btn" type="button" aria-label="이전 페이지">◀</button>
+                <span id="d-page-indicator">1 / 1</span>
+                <button id="d-page-next" class="pg-btn" type="button" aria-label="다음 페이지">▶</button>
+              </span>
+            </div>
             <div class="preview-box" id="preview-box">
               <span class="preview-placeholder">처리 후 표시됩니다</span>
             </div>
           </section>
+          <div class="pane-divider" id="pane-divider" title="드래그해서 좌우 크기 조절"></div>
           <section class="pane">
             <div class="pane-head">
               인식 결과
@@ -117,6 +136,11 @@
             <span id="tune-spin" class="tune-spin" hidden>…처리 중</span>
           </div>
           <div class="tune-img-box"><img id="tune-img" alt="미리보기" /></div>
+          <div id="tune-pagenav" class="tune-pagenav" hidden>
+            <button id="page-prev" class="pg-btn" type="button" aria-label="이전 페이지">◀</button>
+            <span id="page-indicator">1 / 1</span>
+            <button id="page-next" class="pg-btn" type="button" aria-label="다음 페이지">▶</button>
+          </div>
           <div id="tune-measure" class="tune-measure">
             <button id="btn-measure" class="btn">🔍 OCR 적합도 측정</button>
             <span id="measure-result" class="measure-result"></span>
@@ -168,7 +192,25 @@
     </div>
   </div>
 
+  <!-- 첫 사용 안내 투어 (스포트라이트 + 말풍선) -->
+  <div id="tour" class="tour" hidden>
+    <div id="tour-spot" class="tour-spot"></div>
+    <div id="tour-pop" class="tour-pop">
+      <div id="tour-arrow" class="tour-arrow"></div>
+      <span id="tour-step" class="tour-step"></span>
+      <h4 id="tour-title"></h4>
+      <p id="tour-text"></p>
+      <div class="tour-controls">
+        <button id="tour-skip" class="tour-skip" type="button">건너뛰기</button>
+        <div class="tour-nav">
+          <button id="tour-prev" class="btn ghost mini" type="button">이전</button>
+          <button id="tour-next" class="btn primary mini" type="button">다음</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="toast" class="toast" hidden></div>
-  <script src="app.js"></script>
+  <script src="app.js?v=20260629e"></script>
 </body>
 </html>

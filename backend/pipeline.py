@@ -68,9 +68,15 @@ def _load_pdf_pages(path: Path) -> list[np.ndarray]:
     return pages
 
 
-def _save_preview(doc_id: str, processed: np.ndarray) -> None:
-    """전처리된 첫 페이지를 미리보기 PNG로 저장."""
-    preview_path = config.PREVIEW_DIR / f"{doc_id}.png"
+def _save_preview(doc_id: str, idx: int, processed: np.ndarray) -> None:
+    """전처리된 idx(0-기반) 페이지를 미리보기 PNG로 저장.
+
+    페이지별로 `{doc_id}_p{idx}.png`로 따로 저장해, 완료 후 결과 화면에서도
+    페이지를 넘겨가며 이미지↔텍스트를 대조할 수 있게 한다. preview_path 는 방금
+    저장한 페이지를 가리켜, 처리 중 진행 미리보기는 현재 페이지를 보여준다.
+    """
+    name = f"{doc_id}_p{idx}.png"
+    path = config.PREVIEW_DIR / name
     # 미리보기는 폭을 적당히 제한해 용량 절약
     h, w = processed.shape[:2]
     max_w = 1000
@@ -78,8 +84,8 @@ def _save_preview(doc_id: str, processed: np.ndarray) -> None:
         scale = max_w / w
         processed = cv2.resize(processed, (max_w, int(h * scale)),
                                interpolation=cv2.INTER_AREA)
-    cv2.imwrite(str(preview_path), processed)
-    db.set_preview(doc_id, preview_path.name)
+    cv2.imwrite(str(path), processed)
+    db.set_preview(doc_id, name)
 
 
 def _process(doc_id: str) -> None:
@@ -104,6 +110,11 @@ def _process(doc_id: str) -> None:
     # OCR 구간은 5~85%, 혼용 LLM 보정 구간은 85~97%로 분배.
     ocr_end = 85.0 if is_mixed else 95.0
     for idx, page in enumerate(pages):
+        # 사용자가 처리 중 '삭제'하면 DB 행이 사라진다. 매 페이지 시작에서 확인해
+        # 곧바로 중단한다(삭제했는데도 남은 페이지를 계속 OCR하는 낭비를 막는다).
+        if db.get_document(doc_id) is None:
+            return
+
         base = 5 + (idx / total) * (ocr_end - 5)
         span = (ocr_end - 5) / total
 
@@ -114,8 +125,9 @@ def _process(doc_id: str) -> None:
         )
         processed = preprocess_image(page, opt)
 
-        if idx == 0:
-            _save_preview(doc_id, processed)
+        # 현재 처리 중인 페이지를 미리보기로 갱신해, 사용자가 어느 페이지를
+        # 작업 중인지 눈으로 따라갈 수 있게 한다(첫 페이지 고정 → 진행 페이지).
+        _save_preview(doc_id, idx, processed)
 
         db.update_progress(
             doc_id,
@@ -136,6 +148,10 @@ def _process(doc_id: str) -> None:
             stage=f"인식 완료 ({idx + 1}/{total}페이지)",
             progress=base + span,
         )
+
+    # 삭제되었으면 LLM(유료 API)을 호출하지 않고 중단한다.
+    if db.get_document(doc_id) is None:
+        return
 
     # === LLM 한글 병기 보정 (혼용 모드, 여러 페이지를 배치로) =================
     # 토큰 절약 + 문맥 활용을 위해 페이지를 묶어 호출한다(backend/llm_correct.py).

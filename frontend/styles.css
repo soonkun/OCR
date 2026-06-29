@@ -36,10 +36,18 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* 전반적으로 글씨·UI를 비례 확대(가독성). 배율은 UI의 '글씨 크기' 컨트롤로
+   0.9~1.4 사이에서 조절하며 localStorage 에 기억된다(app.js). zoom 은 레이아웃까지
+   비례 확대. body 한 곳에만 적용(html에도 주면 중복 확대됨). */
+:root { --ui-zoom: 1.1; }
+body { zoom: var(--ui-zoom); }
+
 .app {
   display: grid;
   grid-template-columns: 340px 1fr;
-  height: 100vh;
+  /* body{zoom}으로 전체가 확대 렌더되므로, 100vh 를 그대로 쓰면 세로로 넘쳐
+     사이드바 하단이 잘린다. 같은 배율로 나눠 화면에 정확히 맞춘다. */
+  height: calc(100vh / var(--ui-zoom));
   overflow: hidden;
 }
 
@@ -55,6 +63,14 @@ html, body {
 }
 
 .brand { display: flex; align-items: center; gap: 12px; }
+.help-btn {
+  margin-left: auto; flex: none;
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--text-dim); font-size: 14px; font-weight: 700;
+  cursor: pointer; line-height: 1; transition: all .15s ease;
+}
+.help-btn:hover { color: var(--accent); border-color: var(--accent); }
 .logo {
   width: 42px; height: 42px; border-radius: 12px;
   display: grid; place-items: center;
@@ -112,6 +128,22 @@ select {
   padding: 5px 9px; border-radius: 999px; cursor: pointer;
 }
 .chip input { accent-color: var(--accent); margin: 0; }
+
+/* 글씨 크기(UI 배율) 컨트롤 */
+.ui-scale { margin: 14px 0 4px; }
+.ui-scale > label {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 12px; color: var(--text-dim); margin-bottom: 6px;
+}
+.ui-scale output { color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums; }
+.scale-row { display: flex; align-items: center; gap: 8px; }
+.scale-row input[type="range"] { flex: 1; accent-color: var(--accent); }
+.scale-btn {
+  flex: none; width: 28px; height: 26px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--text); font-size: 12px; font-weight: 700; cursor: pointer;
+}
+.scale-btn:hover { border-color: var(--accent); color: var(--accent); }
 
 /* 목록 */
 .list-head {
@@ -186,15 +218,36 @@ select {
 .progress-bar { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width .3s; }
 .stage-label { font-size: 12px; color: var(--text-dim); white-space: nowrap; min-width: 130px; text-align: right; }
 
-.panes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; flex: 1; min-height: 0; }
-.pane { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.panes { display: flex; gap: 0; flex: 1; min-height: 0; }
+.pane { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); display: flex; flex-direction: column; min-height: 0; overflow: hidden; flex: 1 1 0; min-width: 180px; }
+
+/* 미리보기 ↔ 결과 사이 드래그 구분선 (좌우 폭 조절) */
+.pane-divider {
+  flex: 0 0 16px; align-self: stretch; cursor: col-resize;
+  display: flex; align-items: center; justify-content: center;
+}
+.pane-divider::before {
+  content: ""; width: 3px; height: 46px; border-radius: 999px;
+  background: var(--border); transition: background .15s ease, height .15s ease;
+}
+.pane-divider:hover::before, .pane-divider.dragging::before { background: var(--accent); height: 72px; }
 .pane-head {
   padding: 10px 14px; font-size: 12px; font-weight: 600; color: var(--text-dim);
   border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;
 }
-.preview-box { flex: 1; overflow: auto; display: grid; place-items: center; background: var(--preview-bg); padding: 10px; }
-.preview-box img { max-width: 100%; border-radius: 8px; box-shadow: var(--shadow); }
+/* 한 페이지가 통째로 보이도록 폭·높이에 맞춰 축소(스크롤 없음). 칸을 줄이면
+   페이지도 작아져 한눈에 들어온다. */
+.preview-box { flex: 1; overflow: hidden; display: grid; place-items: center; background: var(--preview-bg); padding: 10px; min-height: 0; }
+.preview-box img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; box-shadow: var(--shadow); }
 .preview-placeholder { color: var(--text-dim); font-size: 12px; }
+
+/* 결과 화면 페이지 넘김 (이미지↔텍스트 대조용) */
+.d-pagenav { display: inline-flex; align-items: center; gap: 6px; }
+.d-pagenav #d-page-indicator {
+  font-size: 11.5px; color: var(--text-dim);
+  font-variant-numeric: tabular-nums; min-width: 48px; text-align: center;
+}
+.d-pagenav .pg-btn { width: 26px; height: 22px; font-size: 11px; }
 
 .result-text {
   flex: 1; resize: none; border: none; outline: none;
@@ -249,6 +302,23 @@ select {
 }
 .seg.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 .tune-spin { font-size: 11px; color: var(--accent); margin-left: auto; }
+
+/* 미리보기 페이지 넘김 (PDF 다중 페이지) */
+.tune-pagenav {
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  margin-top: 10px;
+}
+.tune-pagenav #page-indicator {
+  font-size: 12.5px; color: var(--text-dim); font-variant-numeric: tabular-nums;
+  min-width: 64px; text-align: center;
+}
+.pg-btn {
+  width: 32px; height: 28px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--text); font-size: 12px; cursor: pointer;
+}
+.pg-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.pg-btn:disabled { opacity: .4; cursor: default; }
 .tune-img-box {
   flex: 1; min-height: 300px; max-height: 56vh; overflow: auto;
   background: var(--preview-bg); border: 1px solid var(--border);
@@ -272,3 +342,41 @@ select {
 .btn.primary:hover { filter: brightness(1.05); }
 .btn.mini { font-size: 11px; padding: 4px 10px; align-self: flex-start; }
 @media (max-width: 760px) { .tune-body { grid-template-columns: 1fr; } }
+
+/* ===== 첫 사용 안내 투어 ===== */
+.tour { position: fixed; inset: 0; z-index: 300; }
+/* 타깃 강조 없는 환영/마무리 단계(가운데)에서는 화면 전체를 어둡게 */
+.tour.tour-center { background: rgba(15, 23, 42, 0.6); }
+/* 스포트라이트: 거대한 box-shadow로 타깃 밖을 어둡게 뚫어준다 */
+.tour-spot {
+  position: absolute; border-radius: 10px;
+  box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.6);
+  outline: 2px solid var(--accent); outline-offset: 3px;
+  transition: top .25s ease, left .25s ease, width .25s ease, height .25s ease;
+  pointer-events: none;
+}
+.tour-pop {
+  position: absolute; width: 300px; max-width: calc(100vw - 24px);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; box-shadow: var(--shadow); padding: 16px;
+  transition: top .25s ease, left .25s ease;
+}
+.tour-step { font-size: 11px; font-weight: 700; color: var(--accent); }
+.tour-pop h4 { margin: 5px 0 7px; font-size: 15px; }
+.tour-pop p { margin: 0; font-size: 13px; color: var(--text-dim); line-height: 1.65; }
+.tour-controls {
+  display: flex; align-items: center; justify-content: space-between; margin-top: 16px;
+}
+.tour-nav { display: flex; gap: 8px; }
+.tour-skip {
+  background: none; border: none; color: var(--text-dim);
+  font-size: 12px; cursor: pointer; text-decoration: underline; padding: 4px;
+}
+.tour-skip:hover { color: var(--text); }
+/* 말풍선 화살표(삼각형) — 방향 클래스로 위치/색 지정 */
+.tour-arrow { position: absolute; width: 0; height: 0; border: 8px solid transparent; }
+.tour-arrow.left  { left: -16px;  border-right-color: var(--surface); }
+.tour-arrow.right { right: -16px; border-left-color:  var(--surface); }
+.tour-arrow.up    { top: -16px;   border-bottom-color: var(--surface); }
+.tour-arrow.down  { bottom: -16px; border-top-color:   var(--surface); }
+.tour-arrow.hidden { display: none; }

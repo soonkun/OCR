@@ -1,35 +1,42 @@
 @echo off
-REM ── 고문서 OCR 복원: 더블클릭 실행 (Windows) ──
-chcp 65001 >nul
+REM ============================================================
+REM  Gomunseo OCR - one-click launcher (Windows)
+REM  ASCII-only on purpose: Korean text in a .bat gets mojibaked
+REM  on CP949 consoles and breaks parsing. Keep this file ASCII.
+REM ============================================================
 cd /d "%~dp0"
+title Gomunseo OCR
 
-REM 모델 다운로드 서버 지정 (필요 시 ModelScope / BOS 로 변경)
-set PADDLE_PDX_MODEL_SOURCE=HuggingFace
+echo(
+echo   Gomunseo OCR is starting...
+echo(
 
-REM 최초 실행 시: 가상환경(.venv)이 없으면 자동으로 설치
+REM 1) Stop any previous server still holding port 8000
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr "127.0.0.1:8000" ^| findstr LISTENING') do taskkill /F /PID %%p >nul 2>&1
+ping -n 2 127.0.0.1 >nul
+
+REM 2) First run only: create the virtual environment if missing
 if not exist ".venv\Scripts\python.exe" (
-  echo  최초 실행: 필요한 프로그램을 설치합니다 (몇 분 걸릴 수 있어요)...
+  echo   First run: installing packages, this may take a few minutes...
   call setup.bat
 )
-
-REM 실행에 사용할 Python 결정
-if exist ".venv\Scripts\python.exe" (
-  set "RUNPY=.venv\Scripts\python.exe"
-) else (
-  echo  [오류] 설치에 실패했습니다. 위 메시지를 확인하세요.
+if not exist ".venv\Scripts\python.exe" (
+  echo   [ERROR] Setup failed. Please check the messages above.
   pause
   exit /b 1
 )
 
-echo.
-echo  고문서 OCR 복원 서버를 시작합니다...
-echo  잠시 후 브라우저에서 http://localhost:8000/app/ 가 열립니다.
-echo  (이 창을 닫으면 서버가 종료됩니다)
-echo.
+REM 3) Start the server in its own window (close that window to stop)
+REM  --no-access-log: hide the per-request access log spam (the page polls
+REM  /api/documents every second to update the progress bar). Errors still show.
+start "Gomunseo OCR Server" .venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --no-access-log
 
-REM 서버를 별도 창에서 실행
-start "OCR 서버" cmd /k %RUNPY% -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+REM 4) Wait until the server answers, then open the browser
+echo   Waiting for the server to be ready...
+powershell -NoProfile -Command "for($i=0;$i -lt 60;$i++){ try{ if((Invoke-WebRequest -UseBasicParsing 'http://127.0.0.1:8000/api/health' -TimeoutSec 2).StatusCode -eq 200){ exit 0 } }catch{}; Start-Sleep -Milliseconds 500 }; exit 1"
+start "" "http://localhost:8000/app/"
 
-REM 서버가 뜰 시간을 잠깐 준 뒤 브라우저 열기
-timeout /t 5 >nul
-start "" http://localhost:8000/app/
+echo(
+echo   Ready. Browser opens at http://localhost:8000/app/
+echo   (To stop: close the "Gomunseo OCR Server" window.)
+ping -n 4 127.0.0.1 >nul

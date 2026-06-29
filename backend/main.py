@@ -23,6 +23,22 @@ from .preprocess import PreprocessOptions, preprocess_image
 app = FastAPI(title="고문서 OCR 복원", version="1.0.0")
 
 
+@app.middleware("http")
+async def _no_cache_frontend(request, call_next):
+    """프론트엔드(/app)·정적 자산을 브라우저가 캐시하지 않게 한다.
+
+    업데이트한 뒤에도 브라우저가 옛 JS/HTML을 붙들어 새 화면이 안 보이는 문제를
+    막는다(일반 새로고침만으로 항상 최신 화면이 뜨도록). 로컬 앱이라 캐시 끄는
+    비용은 무시할 수 있다.
+    """
+    response = await call_next(request)
+    if request.url.path.startswith("/app"):
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
+
 @app.on_event("startup")
 def _startup() -> None:
     config.ensure_dirs()
@@ -144,20 +160,31 @@ def remove_document(doc_id: str) -> dict[str, Any]:
             Path(doc[key]).unlink(missing_ok=True)
         except Exception:
             pass
-    if doc.get("preview_path"):
-        try:
-            (config.PREVIEW_DIR / doc["preview_path"]).unlink(missing_ok=True)
-        except Exception:
-            pass
+    # 페이지별 미리보기({doc_id}_p*.png)와 단일 미리보기를 모두 정리
+    try:
+        for f in config.PREVIEW_DIR.glob(f"{doc_id}*.png"):
+            f.unlink(missing_ok=True)
+    except Exception:
+        pass
     return {"id": doc_id, "deleted": True}
 
 
 @app.get("/api/documents/{doc_id}/preview")
-def get_preview(doc_id: str):
+def get_preview(doc_id: str, page: int | None = None):
+    """전처리 미리보기 PNG. page(0-기반)를 주면 그 페이지를, 없으면 현재
+    preview_path(처리 중이면 진행 페이지, 완료면 마지막 페이지)를 반환한다."""
     doc = db.get_document(doc_id)
-    if doc is None or not doc.get("preview_path"):
+    if doc is None:
+        raise HTTPException(status_code=404, detail="문서를 찾을 수 없습니다.")
+    if page is not None:
+        path = config.PREVIEW_DIR / f"{doc_id}_p{int(page)}.png"
+        if not path.exists() and doc.get("preview_path"):
+            # 구버전에서 처리돼 페이지별 미리보기가 없으면 단일 미리보기로 폴백
+            path = config.PREVIEW_DIR / doc["preview_path"]
+    elif doc.get("preview_path"):
+        path = config.PREVIEW_DIR / doc["preview_path"]
+    else:
         raise HTTPException(status_code=404, detail="미리보기가 없습니다.")
-    path = config.PREVIEW_DIR / doc["preview_path"]
     if not path.exists():
         raise HTTPException(status_code=404, detail="미리보기가 없습니다.")
     return FileResponse(path, media_type="image/png")
@@ -191,25 +218,34 @@ def download_text(doc_id: str):
 
 @app.post("/api/preview/load")
 async def preview_load(file: UploadFile = File(...)) -> dict[str, Any]:
-    """파일 첫 페이지를 캐시하고 토큰을 발급(이후 재업로드 없이 조정)."""
+    """파일을 캐시하고 토큰·총 페이지 수를 발급(이후 재업로드 없이 페이지별 조정)."""
     data = await file.read()
     if len(data) > config.MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="파일이 너무 큽니다.")
     try:
-        arr = preview.load_first_page(data, file.filename or "")
+        token, pages, arr = preview.store_source(data, file.filename or "")
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"미리보기 로드 실패: {exc}")
-    token = preview.store(arr)
     h, w = arr.shape[:2]
-    return {"token": token, "width": w, "height": h}
+    return {"token": token, "width": w, "height": h, "pages": pages}
+
+
+def _preview_page(payload: dict[str, Any]):
+    """payload 의 token·page 로 캐시된 페이지 ndarray를 가져온다(없으면 404)."""
+    try:
+        page = int(payload.get("page", 0) or 0)
+    except (TypeError, ValueError):
+        page = 0
+    arr = preview.get_page(str(payload.get("token", "")), page)
+    if arr is None:
+        raise HTTPException(status_code=404, detail="미리보기가 만료되었습니다. 다시 선택하세요.")
+    return arr
 
 
 @app.post("/api/preview/render")
 def preview_render(payload: dict[str, Any] = Body(...)):
-    """토큰 + 전처리 파라미터로 처리한 이미지를 PNG로 반환. raw=true면 원본."""
-    arr = preview.get(str(payload.get("token", "")))
-    if arr is None:
-        raise HTTPException(status_code=404, detail="미리보기가 만료되었습니다. 다시 선택하세요.")
+    """토큰 + 페이지 + 전처리 파라미터로 처리한 이미지를 PNG로 반환. raw=true면 원본."""
+    arr = _preview_page(payload)
     if payload.get("raw"):
         png = preview.encode_png(arr)
     else:
@@ -221,9 +257,7 @@ def preview_render(payload: dict[str, Any] = Body(...)):
 @app.post("/api/preview/measure")
 def preview_measure(payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
     """중앙 일부만 OCR해 전처리 설정의 OCR 적합도(신뢰도)를 빠르게 측정."""
-    arr = preview.get(str(payload.get("token", "")))
-    if arr is None:
-        raise HTTPException(status_code=404, detail="미리보기가 만료되었습니다. 다시 선택하세요.")
+    arr = _preview_page(payload)
     if not ocr_engine.paddle_available():
         raise HTTPException(status_code=400, detail="OCR 엔진이 설치되어 있지 않습니다.")
     opt = PreprocessOptions.from_dict(payload)
